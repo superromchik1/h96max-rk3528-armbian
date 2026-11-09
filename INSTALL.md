@@ -62,7 +62,7 @@ https://github.com/superromchik1/h96max-rk3528-armbian/releases/latest
 в описании релиза. Должно быть:
 
 ```
-4abd685fced70a11582fa0d6d89253f4cc96ff7adb2fd2059dbf619bfe87fbbf
+cfc377aecdef62c189ab19da3cae239b36b5d9216e3374f78ae9aa34f8174edd
 ```
 
 Как проверить в Windows (PowerShell):
@@ -233,7 +233,7 @@ bluetoothctl show
 bluetoothctl scan on
 ```
 
-Ожидаемо: есть адрес вида `D8:74:EF:xx:xx:xx` и строка `Powered: yes`,
+Ожидаемо: есть адрес вида `xx:xx:xx:xx:xx:xx` (у каждого свой) и строка `Powered: yes`,
 а `scan on` показывает соседние устройства (наушники, колонки, телефоны).
 
 **Видео-ускоритель (GPU)**:
@@ -292,6 +292,63 @@ armbian-desktop-install cinnamon   # Cinnamon
 ```
 
 Или меню: `armbian-config` → System → Desktop.
+
+**DNS** (если «интернет есть, а имена не резолвятся»):
+
+```bash
+resolvectl status | head -20        # какие серверы реально используются
+resolvectl query github.com         # проверка резолва
+```
+
+Установщик настраивает DNS правильно: явные серверы (1.1.1.1, 8.8.8.8), запасные
+(9.9.9.9, 149.112.112.112), кэш включён, а `/etc/resolv.conf` — ссылка на
+stub-резолвер `127.0.0.53`. Если понадобится свой DNS:
+
+```bash
+nmcli connection modify "ИМЯ_СЕТИ" ipv4.dns "192.168.1.1 1.1.1.1"
+nmcli connection up "ИМЯ_СЕТИ"
+```
+
+---
+
+## Обновление системы — и почему правки не потеряются
+
+Обновлять систему можно как обычно:
+
+```bash
+apt update && apt upgrade
+# или через armbian-config / armbian-update
+```
+
+Есть один риск: обновление ядра может заменить файл описания железа (DTB) в `/boot`
+на стоковый — тогда Wi-Fi, Bluetooth, GPU и HDMI перестанут работать. Хуже всего,
+что внешне система загрузится, и непонятно, что случилось.
+
+Поэтому при установке ставится **h96max-dtb-guard** — маленькая «страховка», которая:
+
+1. при каждой загрузке смотрит, что DTB на месте и пропатчен;
+2. если DTB заменили — заново применяет правки (с резервной копией);
+3. если DTB удалили — восстанавливает из `/usr/local/share/h96max/`;
+4. проверяет `fdtfile` и `console=display` в `armbianEnv.txt`;
+5. запускается и после установки пакетов — так ловится обновление ядра.
+
+Проверить состояние вручную:
+
+```bash
+h96max-dtb-guard.sh check
+# "Итог: всё в порядке" и код 0 — хорошо
+# "Итог: есть проблемы" и код 1 — запустите h96max-dtb-guard.sh (без check)
+```
+
+Посмотреть, что guard делал:
+
+```bash
+journalctl -t h96max-dtb-guard -n 30
+cat /var/log/h96max-dtb-guard.log
+```
+
+> Совет: ветку ядра лучше не менять (6.1 → 6.18). Guard вернёт DTB, но драйверы
+> в mainline-ядрах другие, и Wi-Fi/видеодекодер могут не подняться.
 
 ---
 
@@ -393,6 +450,10 @@ INSTALL.md                     — этот файл
 setup-h96max-rk3528.sh         — главный установщик (делает все правки)
 make-image.sh                  — сборка такого же образа из любого Armbian
 scripts/dtb-fix.py             — правки описания железа (DTB)
+scripts/dtb-guard.sh           — страховка: возвращает правки после обновления ядра
+scripts/dtb-guard.service      — запуск страховки при загрузке
+scripts/apt-dtb-guard.conf     — запуск страховки после установки пакетов
+scripts/resolved-dns.conf      — настройки DNS (systemd-resolved)
 scripts/btattach.service       — автозапуск Bluetooth
 scripts/bt-init.sh             — включение Bluetooth после загрузки
 files/rk3528-evb2-ddr3-v10.dtb — уже пропатченный DTB (можно скопировать вручную)

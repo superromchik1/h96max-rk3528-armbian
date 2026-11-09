@@ -85,6 +85,34 @@ def del_prop(body, prop):
     return re.sub(r"\n\t+%s = [^;]+;" % re.escape(prop), "", body)
 
 
+def parse_strlist(prop):
+    """Разбирает строковый список: "a\\0b" или "a", "b" — оба варианта."""
+    if not prop:
+        return []
+    s = prop.strip()
+    if s.startswith("<"):
+        s = s[1:-1]
+    if "\\0" in s:
+        parts = s.split("\\0")
+    else:
+        parts = re.split(r'"\s*,\s*"', s)
+    return [p.strip().strip('"') for p in parts if p.strip().strip('"')]
+
+
+def clock_pairs(prop):
+    """clocks = <phandle id phandle id ...> — возвращает список пар (phandle, id)."""
+    if not prop:
+        return None
+    toks = prop.strip("<>").split()
+    if len(toks) % 2:
+        return None
+    return [(toks[i], toks[i + 1]) for i in range(0, len(toks), 2)]
+
+
+def pairs_to_prop(pairs):
+    return "<%s>" % " ".join("%s %s" % (p[0], p[1]) for p in pairs)
+
+
 # ---------------------------------------------------------------- правки
 
 
@@ -216,27 +244,21 @@ def patch_bluetooth(text):
 def patch_gpu(text):
     """
     lima ждёт клоки bus/core, а вендор даёт clk_mali/aclk_gpu_mali/pclk_gpu.
-    Берём значение aclk_gpu_mali и подставляем под оба имени.
+    Берём пару aclk_gpu_mali и подставляем её под оба имени.
     """
     body = node_text(text, "gpu@ff700000")
     if body is None:
         return text, False
     if 'clock-names = "bus\\0core";' in body:
         return text, False
-    names = get_prop(body, "clock-names")
-    clocks = get_prop(body, "clocks")
-    if not names or not clocks:
-        return text, False
-    nm = [x.strip('"') for x in names.strip("<>").split("\\0")]
-    cl = clocks.strip("<>").split()
-    if len(nm) != len(cl):
+    nm = parse_strlist(get_prop(body, "clock-names"))
+    pairs = clock_pairs(get_prop(body, "clocks"))
+    if not nm or not pairs or len(nm) != len(pairs):
         return text, False
     if "aclk_gpu_mali" not in nm:
         return text, False
-    aclk = cl[nm.index("aclk_gpu_mali")]
-    if len(aclk.split()) != 2:
-        return text, False
-    body = set_prop(body, "clocks", "<%s %s %s %s>" % (aclk, aclk))
+    aclk = pairs[nm.index("aclk_gpu_mali")]
+    body = set_prop(body, "clocks", pairs_to_prop([aclk, aclk]))
     body = set_prop(body, "clock-names", '"bus\\0core"')
     body = set_prop(body, "interrupt-names",
                     '"gp\\0gpmmu\\0pp\\0pp0\\0ppmmu0\\0pp1\\0ppmmu1"')
@@ -249,22 +271,20 @@ def patch_rkvdec(text):
     body = node_text(text, "rkvdec@ff740100")
     if body is None:
         return text, False
-    if "clk_core" in (get_prop(body, "clock-names") or ""):
+    names_prop = get_prop(body, "clock-names") or ""
+    if "clk_core" in names_prop:
         return text, False
-    names = get_prop(body, "clock-names")
-    clocks = get_prop(body, "clocks")
-    if not names or not clocks:
-        return text, False
-    nm = [x.strip('"') for x in names.strip("<>").split("\\0")]
-    cl = clocks.strip("<>").split()
-    if len(nm) != len(cl):
+    nm = parse_strlist(names_prop)
+    pairs = clock_pairs(get_prop(body, "clocks"))
+    if not nm or not pairs or len(nm) != len(pairs):
         return text, False
     if "aclk_vcodec" not in nm or "clk_hevc_cabac" not in nm:
         return text, False
-    core = cl[nm.index("aclk_vcodec")]
-    cabac = cl[nm.index("clk_hevc_cabac")]
-    body = set_prop(body, "clocks", "<%s %s %s>" % (" ".join(cl), core, cabac))
-    body = set_prop(body, "clock-names", '"%s\\0clk_core\\0clk_cabac"' % names.strip("<>").strip('"'))
+    core = pairs[nm.index("aclk_vcodec")]
+    cabac = pairs[nm.index("clk_hevc_cabac")]
+    body = set_prop(body, "clocks", pairs_to_prop(pairs + [core, cabac]))
+    body = set_prop(body, "clock-names",
+                    '"%s\\0clk_core\\0clk_cabac"' % "\\0".join(nm))
     text, _ = replace_node(text, "rkvdec@ff740100", body)
     return text, True
 

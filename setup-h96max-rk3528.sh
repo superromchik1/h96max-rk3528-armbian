@@ -88,6 +88,45 @@ else
   echo "  (dry-run) fdtfile=rockchip/${DTB_NAME}"
 fi
 
+# ---------------------------------------------------------------- DTB-guard
+log "Ставлю защиту DTB (после обновлений ядра правки не потеряются)"
+if [ "$DRY" = 0 ]; then
+  install -d /usr/local/share/h96max /var/lib/h96max
+  install -m 755 "$HERE/scripts/dtb-guard.sh" /usr/local/bin/h96max-dtb-guard.sh
+  install -m 644 "$HERE/scripts/dtb-fix.py" /usr/local/share/h96max/dtb-fix.py
+  install -m 644 "$HERE/files/${DTB_NAME}" "/usr/local/share/h96max/${DTB_NAME}"
+  install -m 644 "$HERE/scripts/dtb-guard.service" /etc/systemd/system/h96max-dtb-guard.service
+  install -m 644 "$HERE/scripts/apt-dtb-guard.conf" /etc/apt/apt.conf.d/99-h96max-dtb-guard
+  systemctl daemon-reload
+  systemctl enable h96max-dtb-guard.service >/dev/null 2>&1 || true
+  /usr/local/bin/h96max-dtb-guard.sh apply || warn "guard не смог применить правки (см. /var/log/h96max-dtb-guard.log)"
+fi
+
+# ---------------------------------------------------------------- DNS
+log "Настраиваю DNS (systemd-resolved, с кэшем и запасными серверами)"
+if [ "$DRY" = 0 ]; then
+  install -d /etc/systemd/resolved.conf.d
+  install -m 644 "$HERE/scripts/resolved-dns.conf" /etc/systemd/resolved.conf.d/99-h96max.conf
+  # DNS в профилях NetworkManager — переживает смену сетей и обновления
+  while IFS=: read -r uuid typ; do
+    case "$typ" in
+      802-11-wireless|802-3-ethernet)
+        nmcli connection modify "$uuid" ipv4.dns "1.1.1.1 8.8.8.8" ipv4.ignore-auto-dns no >/dev/null 2>&1 || \
+          warn "не удалось задать DNS для профиля $uuid"
+        ;;
+    esac
+  done < <(nmcli -t -f UUID,TYPE connection show 2>/dev/null)
+  systemctl enable systemd-resolved >/dev/null 2>&1 || true
+  systemctl restart systemd-resolved >/dev/null 2>&1 || true
+  # /etc/resolv.conf должен быть ссылкой на stub-резолвер, а не статичным файлом
+  if [ ! -L /etc/resolv.conf ] || [ "$(readlink -f /etc/resolv.conf)" != "/run/systemd/resolve/stub-resolv.conf" ]; then
+    cp -f /etc/resolv.conf "/root/resolv.conf.bak.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
+    ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+    echo "    /etc/resolv.conf -> stub-resolv.conf"
+  fi
+  echo "    $(resolvectl status 2>/dev/null | grep -m1 'resolv.conf mode' | sed 's/^ *//')"
+fi
+
 # ---------------------------------------------------------------- Wi-Fi модуль
 log "Настройки драйвера AIC8800"
 if [ "$DRY" = 0 ]; then

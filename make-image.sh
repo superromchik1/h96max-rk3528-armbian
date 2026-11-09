@@ -131,8 +131,39 @@ install -d "$ROOT_MNT/root/h96max-setup" \
            "$ROOT_MNT/etc/modprobe.d" \
            "$ROOT_MNT/etc/udev/rules.d" \
            "$ROOT_MNT/usr/local/bin" \
+           "$ROOT_MNT/usr/local/share/h96max" \
+           "$ROOT_MNT/var/lib/h96max" \
+           "$ROOT_MNT/etc/apt/apt.conf.d" \
+           "$ROOT_MNT/etc/systemd/resolved.conf.d" \
            "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
 cp -a "$HERE/." "$ROOT_MNT/root/h96max-setup/"
+
+# --- DNS: явные серверы, запасные, кэш; resolv.conf -> stub-resolv.conf ---
+install -m 644 "$HERE/scripts/resolved-dns.conf" \
+    "$ROOT_MNT/etc/systemd/resolved.conf.d/99-h96max.conf"
+if [ -e "$ROOT_MNT/lib/systemd/system/systemd-resolved.service" ]; then
+  ln -sfn /run/systemd/resolve/stub-resolv.conf "$ROOT_MNT/etc/resolv.conf"
+  ln -sfn /lib/systemd/system/systemd-resolved.service \
+         "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/systemd-resolved.service"
+  echo "    DNS: resolved настроен, resolv.conf -> stub"
+else
+  echo "    DNS: в образе нет systemd-resolved — оставляю как есть (конфиг всё равно на месте)"
+fi
+
+# --- защита DTB: переприменяет правки после обновления ядра ---
+install -m 755 "$HERE/scripts/dtb-guard.sh" "$ROOT_MNT/usr/local/bin/h96max-dtb-guard.sh"
+install -m 644 "$HERE/scripts/dtb-fix.py" "$ROOT_MNT/usr/local/share/h96max/dtb-fix.py"
+install -m 644 "$HERE/files/${DTB_NAME}" "$ROOT_MNT/usr/local/share/h96max/${DTB_NAME}"
+# эталонный хеш: чтобы при первой загрузке guard не переписывал DTB зря
+sha256sum "$HERE/files/${DTB_NAME}" | cut -d' ' -f1 > "$WORK/expected.sha"
+mkdir -p "$ROOT_MNT/var/lib/h96max"
+cp -f "$WORK/expected.sha" "$ROOT_MNT/var/lib/h96max/dtb.sha256"
+install -m 644 "$HERE/scripts/dtb-guard.service" \
+    "$ROOT_MNT/etc/systemd/system/h96max-dtb-guard.service"
+install -m 644 "$HERE/scripts/apt-dtb-guard.conf" \
+    "$ROOT_MNT/etc/apt/apt.conf.d/99-h96max-dtb-guard"
+ln -sf /etc/systemd/system/h96max-dtb-guard.service \
+       "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/h96max-dtb-guard.service"
 
 cat > "$ROOT_MNT/etc/modprobe.d/aic8800.conf" <<'EOF'
 options aic8800_sdio_wlan use_2040=0 ps_on=0 country_code=RU

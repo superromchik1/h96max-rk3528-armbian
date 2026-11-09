@@ -1,0 +1,18 @@
+[Unit]
+Description=H96 Max RK3528: check and restore device-tree patches
+Documentation=https://github.com/superromchik1/h96max-rk3528-armbian
+# Загрузочный раздел должен быть смонтирован
+After=local-fs.target
+Before=bluetooth.service btattach.service bt-init.service systemd-modules-load.service
+ConditionPathExists=/boot/armbianEnv.txt
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/h96max-dtb-guard.sh apply
+# не валим загрузку, даже если что-то пошло не так
+SuccessExitStatus=0 1
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
