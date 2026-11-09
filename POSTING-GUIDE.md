@@ -18,8 +18,8 @@
 ## Шаг 1. Аккаунт GitHub (если ещё нет)
 
 1. Открой https://github.com/signup
-2. Введи email, придумай пароль и **username** (латиницей, например `roma-rk`).
-   Username станет частью ссылки: `github.com/roma-rk`.
+2. Введи email, придумай пароль и **username** (латиницей, например `myusername`).
+   Username станет частью ссылки: `github.com/myusername`.
 3. Подтверди email.
 4. В настройках профиля (правый верхний угол → Settings → Public profile)
    заполни имя и, если хочешь, аватар. Для первого поста достаточно.
