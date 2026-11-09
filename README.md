@@ -43,7 +43,7 @@ sha256: 4abd685fced70a11582fa0d6d89253f4cc96ff7adb2fd2059dbf619bfe87fbbf
 gunzip -c h96max-rk3528-armbian.img.gz | dd of=/dev/sdX bs=4M status=progress
 ```
 
-или Rufus / balenaEtcher на Windows. Рабочий стол при желании ставится одной командой
+или [Rufus](https://rufus.ie) / [balenaEtcher](https://etcher.balena.io) на Windows. Рабочий стол при желании ставится одной командой
 (`armbian-desktop-install`, см. ниже).
 
 > **Загружаться лучше с USB-флешки.** Слот microSD на этой приставке работает нестабильно:
@@ -68,7 +68,19 @@ git clone <этот-репозиторий> h96max && cd h96max
 Скрипт правит DTB (с бэкапом в `.orig`), прописывает `fdtfile` и `console=display`,
 настраивает драйвер AIC8800, ставит udev-правила и сервисы Bluetooth.
 
-Подробная пошаговая инструкция, включая перепрошивку с нуля и восстановление через Maskrom, — в [INSTALL.md](INSTALL.md).
+Подробная пошаговая инструкция, включая перепрошивку с нуля, — в [INSTALL.md](INSTALL.md).
+
+## Если приставка не грузится
+
+Почти всё восстановимо через аварийный режим **Maskrom**:
+
+- как войти (фото кнопки и площадок): [4PDA, сообщение 142893859](https://4pda.to/forum/index.php?showtopic=1076564&view=findpost&p=142893859)
+- инструменты для прошивки (Windows): [RKDevelopTool](https://dl2.radxa.com/tools/windows/RKDevelopTool_v1.37.zip),
+  [RKDevTool (GUI)](https://dl2.radxa.com/tools/windows/RKDevTool_Release_v3.37.zip),
+  [драйверы USB](https://dl2.radxa.com/tools/windows/DriverAssitant_v5.14.zip)
+- запись образа на флешку: [Rufus](https://rufus.ie) или [balenaEtcher](https://etcher.balena.io)
+
+Пошагово с командами — в разделе «Если что-то сломалось» файла [INSTALL.md](INSTALL.md).
 
 ## Рабочий стол: любой, по желанию
 
@@ -182,7 +194,7 @@ interrupt-names = "gp", "gpmmu", "pp", "pp0", "ppmmu0", "pp1", "ppmmu1";
 - Armbian 26.11 (Debian 12, ядро `6.1.174-rk35xx-ophub`)
 - DTB: вендорский, вытащенный из Android и пропатченный
 
-На других ревизиях платы (4/64, DDR4, другие Wi-Fi-чипы) правки могут отличаться — сверяйтесь с `dmesg` и `STATUS.md`, а скрипт `setup.sh` правит DTB на месте под вашу плату.
+На других ревизиях платы (4/64, DDR4, другие Wi-Fi-чипы) правки могут отличаться — сверяйтесь с логами системы (`dmesg`), а скрипт `setup-h96max-rk3528.sh` умеет править DTB на месте под вашу плату.
 
 ## Благодарности
 

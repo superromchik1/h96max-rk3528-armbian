@@ -77,7 +77,7 @@ Get-FileHash .\h96max-rk3528-armbian.img.gz -Algorithm SHA256
 
 Нужна флешка на 8 ГБ или больше. **Всё, что на ней было, сотрётся.**
 
-- **Windows:** программа Rufus (https://rufus.ie) или balenaEtcher.
+- **Windows:** программа [Rufus](https://rufus.ie) или [balenaEtcher](https://etcher.balena.io).
   Выбери файл `.img.gz` и флешку → «Записать».
 - **Linux:** одна команда (где `/dev/sdX` — твоя флешка, проверь внимательно!):
 
@@ -289,24 +289,75 @@ armbian-desktop-install cinnamon   # Cinnamon
 Приставку почти невозможно «убить»: есть аварийный режим **Maskrom**.
 Он работает, даже если система вообще не запускается.
 
+### Где взять всё нужное
+
+| Что | Ссылка |
+|---|---|
+| Фото и описание, как войти в Maskrom на этой плате | [тема на 4PDA, сообщение 142893859](https://4pda.to/forum/index.php?showtopic=1076564&view=findpost&p=142893859) |
+| **RKDevelopTool** (консольная утилита, Windows) | [RKDevelopTool_v1.37.zip](https://dl2.radxa.com/tools/windows/RKDevelopTool_v1.37.zip) |
+| **RKDevTool** (то же, но с графическим интерфейсом) | [RKDevTool_Release_v3.37.zip](https://dl2.radxa.com/tools/windows/RKDevTool_Release_v3.37.zip) |
+| Драйверы USB для приставки (нужны один раз) | [DriverAssitant_v5.14.zip](https://dl2.radxa.com/tools/windows/DriverAssitant_v5.14.zip) |
+| Rufus (запись образа на флешку, Windows) | [rufus.ie](https://rufus.ie) |
+| balenaEtcher (альтернатива Rufus) | [balena.io/etcher](https://etcher.balena.io) |
+
+> Всё это лежит в открытом каталоге Radxa: https://dl2.radxa.com/tools/windows/
+> (там же есть другие версии инструментов).
+
+### Шаг 1. Войти в Maskrom
+
 1. Отключи питание.
-2. Зажми кнопку внутри гнезда AV и замкни две площадки на плате (у нашей платы они
-   рядом с флеш-памятью; фото — в теме на 4PDA, сообщение 142893859).
-3. Подключи кабель USB-A↔USB-A к компьютеру. Приставка определится как устройство
-   `Loader` или `Maskrom`.
-4. Залей образ программой `rkdeveloptool` (лежит в папке `tools/`):
+2. Зажми кнопку внутри гнезда AV и замкни две площадки на плате — они рядом
+   с флеш-памятью. Подробно с фото: [4PDA, сообщение 142893859](https://4pda.to/forum/index.php?showtopic=1076564&view=findpost&p=142893859).
+3. Подключи кабель USB-A↔USB-A к компьютеру.
+4. Приставка определится как устройство `Loader` или `Maskrom`
+   (в диспетчере устройств — `Rockusb Device`, `VID 2207`).
+
+Если компьютер не видит приставку — поставь драйверы `DriverAssitant`, они нужны один раз.
+
+### Шаг 2. Записать образ
+
+**Вариант с графическим интерфейсом (RKDevTool):**
+
+1. Запусти `RKDevTool.exe`.
+2. Внизу должно быть `Found One MASKROM Device` (или `Loader`).
+3. Вкладка **Advanced** → выбери файл образа → **Write**.
+4. Дождись `Success`, нажми **Reset Device**.
+
+**Вариант с командной строкой (RKDevelopTool):**
 
 ```powershell
-rkdeveloptool.exe db image.img
-rkdeveloptool.exe rd 0 0x100
+# 1. проверить, что приставка видна
+RKDevelopTool.exe ld
+
+# 2. записать образ с нулевого сектора
+RKDevelopTool.exe wl 0 h96max-rk3528-armbian.img
+
+# 3. перезагрузить
+RKDevelopTool.exe rd
 ```
 
-Если нужно вернуть только загрузчик — он в файле `tools/vendor_idbloader.bin`
-и пишется по смещению `0x8000`:
+> Образ перед записью нужно распаковать: `h96max-rk3528-armbian.img.gz` → `.img`.
+> На Windows это делает 7-Zip или `gzip -d`.
+
+### Шаг 3. Если не грузится загрузчик
+
+Бывает, что образ записан, а система не стартует: тогда нужно отдельно восстановить
+загрузчик (idbloader) — первые 4 МиБ образа, начиная со смещения `0x8000`.
+В образе он уже есть, просто извлеки его:
+
+```bash
+# Linux / macOS / Git Bash
+dd if=h96max-rk3528-armbian.img of=idbloader.bin bs=512 skip=64 count=8000
+```
+
+Затем запиши его по смещению `0x8000` (сектор 64):
 
 ```powershell
-rkdeveloptool.exe wl 64 vendor_idbloader.bin
+RKDevelopTool.exe wl 64 idbloader.bin
+RKDevelopTool.exe rd
 ```
+
+После перезагрузки система должна подняться с eMMC.
 
 ---
 
@@ -319,7 +370,7 @@ rkdeveloptool.exe wl 64 vendor_idbloader.bin
 | Wi-Fi: `tx msg fc retry fail` | не включено питание модуля (3.3 В) | DTB не пропатчен — запусти скрипт |
 | Bluetooth: адрес `00:00:00:00:00:00` | подключается не тем способом | нужен `btattach`, а не `hciattach`; и он должен стартовать после загрузки BT-прошивки |
 | Нет звука по HDMI | выбран не тот выход | `aplay -l`, затем `alsamixer` |
-| Не грузится с eMMC | загрузчик не на месте | залей `vendor_idbloader.bin` по смещению `0x8000` через Maskrom |
+| Не грузится с eMMC | загрузчик не на месте | восстанови idbloader через Maskrom (шаг 3 выше) |
 
 ---
 
