@@ -127,7 +127,11 @@ echo "    $(grep -E '^(fdtfile|console)=' "$ENVF" | tr '\n' ' ')"
 
 # ---------------------------------------------------------------- конфиги
 log "Кладу конфиги и сервисы в корень образа"
-install -d "$ROOT_MNT/root/h96max-setup"
+install -d "$ROOT_MNT/root/h96max-setup" \
+           "$ROOT_MNT/etc/modprobe.d" \
+           "$ROOT_MNT/etc/udev/rules.d" \
+           "$ROOT_MNT/usr/local/bin" \
+           "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
 cp -a "$HERE/." "$ROOT_MNT/root/h96max-setup/"
 
 cat > "$ROOT_MNT/etc/modprobe.d/aic8800.conf" <<'EOF'
@@ -146,8 +150,6 @@ install -m 755 "$HERE/scripts/bt-init.sh" "$ROOT_MNT/usr/local/bin/bt-init.sh"
 install -m 644 "$HERE/scripts/btattach.service" "$ROOT_MNT/etc/systemd/system/btattach.service"
 install -m 644 "$HERE/scripts/bt-init.service" "$ROOT_MNT/etc/systemd/system/bt-init.service"
 
-mkw() { mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"; }
-mkw
 ln -sf /lib/systemd/system/bluetooth.service \
        "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/bluetooth.service"
 ln -sf /etc/systemd/system/btattach.service \
