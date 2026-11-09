@@ -310,25 +310,29 @@ def main():
     src = args.dtb
     out = args.out or (src + ".fixed")
     tmpdir = tempfile.mkdtemp(prefix="dtbfix-")
-    dts = os.path.join(tmpdir, "in.dts")
-    decompile(src, dts)
-    text = open(dts, encoding="utf-8").read()
+    try:
+        dts = os.path.join(tmpdir, "in.dts")
+        decompile(src, dts)
+        text = open(dts, encoding="utf-8").read()
 
-    steps = [
-        ("вычищаем chosen/bootargs", strip_bootargs),
-        ("правим SDIO (50 МГц, 4 бита, задержка)", lambda t: patch_sdio(t, None)),
-        ("питание Wi-Fi (regulator 3.3 В) и pwrseq", patch_wifi_power),
-        ("включаем Bluetooth", patch_bluetooth),
-        ("клоки GPU (bus/core)", patch_gpu),
-        ("клоки rkvdec2 (clk_core/clk_cabac)", patch_rkvdec),
-        ("клок Wi-Fi (ref_wifi_clk)", patch_wlan_clock),
-    ]
-    for title, fn in steps:
-        text, changed = fn(text)
-        print(("%-42s %s" % (title, "изменено" if changed else "уже в порядке")))
+        steps = [
+            ("вычищаем chosen/bootargs", strip_bootargs),
+            ("правим SDIO (50 МГц, 4 бита, задержка)", lambda t: patch_sdio(t, None)),
+            ("питание Wi-Fi (regulator 3.3 В) и pwrseq", patch_wifi_power),
+            ("включаем Bluetooth", patch_bluetooth),
+            ("клоки GPU (bus/core)", patch_gpu),
+            ("клоки rkvdec2 (clk_core/clk_cabac)", patch_rkvdec),
+            ("клок Wi-Fi (ref_wifi_clk)", patch_wlan_clock),
+        ]
+        for title, fn in steps:
+            text, changed = fn(text)
+            print(("%-42s %s" % (title, "изменено" if changed else "уже в порядке")))
 
-    open(dts, "w", encoding="utf-8").write(text)
-    compile_(dts, out)
+        open(dts, "w", encoding="utf-8").write(text)
+        compile_(dts, out)
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
     print("\nГотово: %s" % out)
     print("Установить:")
     print("  cp %s /boot/dtb/rockchip/rk3528-evb2-ddr3-v10.dtb" % out)
